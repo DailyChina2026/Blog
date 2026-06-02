@@ -1,0 +1,46 @@
+name: Update Posts Manifest
+
+on:
+  push:
+    paths:
+      - 'posts/**/*.md'  # 当posts目录下有md文件变更时触发
+  workflow_dispatch:     # 支持手动触发
+
+jobs:
+  update-manifest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Generate articles manifest
+        run: |
+          # 生成文章清单JSON
+          node -e '
+          const fs = require("fs");
+          const path = require("path");
+          const postsDir = "./posts";
+          const files = fs.readdirSync(postsDir).filter(f => f.endsWith(".md"));
+          const posts = [];
+          for (const file of files) {
+            const content = fs.readFileSync(path.join(postsDir, file), "utf8");
+            // 解析front matter获取标题、日期等
+            const titleMatch = content.match(/title:\s*[""]?(.+?)[""]?\n/);
+            const dateMatch = content.match(/date:\s*(.+?)\n/);
+            posts.push({
+              filename: file,
+              title: titleMatch ? titleMatch[1] : file.replace(".md", ""),
+              date: dateMatch ? dateMatch[1] : new Date().toISOString().split("T")[0],
+              category: "随笔",
+              tags: []
+            });
+          }
+          fs.writeFileSync("articles_manifest.json", JSON.stringify({posts, updated: new Date()}, null, 2));
+          '
+          
+      - name: Commit and push if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add articles_manifest.json
+          git diff --quiet && git diff --staged --quiet || git commit -m "Auto-update posts manifest"
+          git push
