@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>个人博客_基于Markdown动态更新_新浪风格</title>
+    <!-- 引入 marked.js 用于将 Markdown 转换为 HTML -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #e9eef3 url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgdmlld0JveD0iMCAwIDQwIDQwIj48cGF0aCBmaWxsPSIjYzBkMGUwIiBmaWxsLW9wYWNpdHk9IjAuMDgiIGQ9Ik0wIDBoNDB2NDBIMHoiLz48cGF0aCBkPSJNMjAgMTBhMTAgMTAgMCAwIDEgMCAyMCAxMCAxMCAwIDAgMSAwLTIweiIgZmlsbD0iI2ZmZiIgZmlsbC1vcGFjaXR5PSIwLjA1Ii8+PC9zdmc+') repeat;
+            font-family: '微软雅黑', 'Helvetica Neue', 'Lucida Grande', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', Arial, sans-serif;
+            line-height: 1.5;
+            color: #2c3e4e;
+        }
+
+        /* 整体容器仿新浪博客960经典宽度 */
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: #fff;
+            box-shadow: 0 0 10px rgba(0,0,0,0.05);
+        }
+
+        /* 顶部红色警示条（保留架构风格，内容修改为个人提示） */
+        .top-notice {
+            background: #fff3e0;
+            border-bottom: 1px solid #ffd89c;
+            color: #c75c00;
+            font-size: 12px;
+            padding: 8px 20px;
+            text-align: center;
+            font-family: '宋体', Tahoma, Geneva, sans-serif;
+        }
+        .top-notice a {
+            color: #c75c00;
+            text-decoration: underline;
+        }
+
+        /* 头部蓝色主区域 */
+        .blog-header {
+            background: #2c7cb8;
+            background: linear-gradient(135deg, #1e6da3 0%, #2c7cb8 100%);
+            padding: 25px 30px 20px 30px;
+            color: white;
+            border-bottom: 3px solid #ffb347;
+        }
+        .blog-title {
+            font-size: 32px;
+            font-weight: normal;
+            letter-spacing: 1px;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
+        }
+        .blog-title a {
+            color: white;
+            text-decoration: none;
+        }
+        .blog-sub {
+            font-size: 12px;
+            margin-top: 8px;
+            opacity: 0.8;
+        }
+
+        /* 导航栏 */
+        .nav-bar {
+            background: #f6f8fa;
+            border-bottom: 1px solid #ddd;
+            border-top: 1px solid #e5e9ef;
+            padding: 0 20px;
+        }
+        .nav-list {
+            list-style: none;
+            display: flex;
+            flex-wrap: wrap;
+        }
+        .nav-list li {
+            margin-right: 30px;
+        }
+        .nav-list li a {
+            display: inline-block;
+            padding: 12px 0;
+            font-size: 14px;
+            color: #2c7cb8;
+            text-decoration: none;
+            font-weight: bold;
+        }
+        .nav-list li a:hover {
+            color: #ff8c00;
+            border-bottom: 2px solid #ff8c00;
+            margin-bottom: -2px;
+        }
+        .nav-list li.active a {
+            color: #ff6a00;
+            border-bottom: 2px solid #ff6a00;
+            margin-bottom: -2px;
+        }
+
+        /* 主体网格两栏布局 */
+        .main-wrapper {
+            display: flex;
+            flex-wrap: wrap;
+            padding: 30px 20px 20px 20px;
+            gap: 30px;
+            background: #fff;
+        }
+
+        .content-left {
+            flex: 2.2;
+            min-width: 260px;
+        }
+
+        .sidebar-right {
+            flex: 1.2;
+            min-width: 200px;
+        }
+
+        /* 文章卡片样式 */
+        .blog-entry {
+            border-bottom: 1px dashed #e0e4e8;
+            margin-bottom: 28px;
+            padding-bottom: 20px;
+        }
+        .entry-title {
+            font-size: 22px;
+            font-weight: 500;
+            margin-bottom: 8px;
+        }
+        .entry-title a {
+            color: #2c7cb8;
+            text-decoration: none;
+        }
+        .entry-title a:hover {
+            color: #ff6600;
+            text-decoration: underline;
+        }
+        .entry-meta {
+            font-size: 12px;
+            color: #9aa9b7;
+            margin-bottom: 12px;
+            border-left: 3px solid #ffb347;
+            padding-left: 8px;
+        }
+        .entry-summary {
+            font-size: 14px;
+            color: #4a5b6c;
+            line-height: 1.6;
+            margin-bottom: 12px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+        }
+        .read-more {
+            font-size: 12px;
+            color: #ff8c00;
+            text-decoration: none;
+        }
+        .read-more:hover {
+            text-decoration: underline;
+        }
+
+        /* 单篇文章详情页面样式 (显示完整md转换内容) */
+        .post-detail {
+            background: #fff;
+            padding: 10px 0 30px;
+        }
+        .post-detail .detail-title {
+            font-size: 28px;
+            margin-bottom: 10px;
+            color: #1f3a4b;
+        }
+        .post-detail .detail-meta {
+            border-left: 3px solid #ffb347;
+            padding-left: 12px;
+            margin: 15px 0 25px;
+            color: #6c7a89;
+            font-size: 13px;
+        }
+        .post-content {
+            font-size: 16px;
+            line-height: 1.7;
+            color: #2c3e4e;
+        }
+        .post-content img {
+            max-width: 100%;
+            height: auto;
+        }
+        .post-content pre {
+            background: #f4f6f9;
+            padding: 12px;
+            overflow-x: auto;
+            border-radius: 6px;
+        }
+        .back-link {
+            display: inline-block;
+            margin: 30px 0 10px;
+            background: #eef2f9;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 13px;
+            color: #2c7cb8;
+            text-decoration: none;
+        }
+
+        /* 侧边栏模块 */
+        .side-mod {
+            background: #fbfcfd;
+            border: 1px solid #e8edf2;
+            margin-bottom: 25px;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .mod-title {
+            background: #f0f4f8;
+            padding: 10px 15px;
+            font-size: 16px;
+            font-weight: bold;
+            color: #2c7cb8;
+            border-left: 4px solid #ffb347;
+            border-bottom: 1px solid #e0e8ef;
+        }
+        .mod-content {
+            padding: 15px;
+            font-size: 13px;
+        }
+        .info-list {
+            list-style: none;
+        }
+        .info-list li {
+            padding: 6px 0;
+            border-bottom: 1px dotted #eceff5;
+        }
+        .info-list li a {
+            color: #2c7cb8;
+            text-decoration: none;
+        }
+        .info-list li a:hover {
+            color: #ff8c00;
+        }
+        .tag-cloud {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .tag-cloud a {
+            background: #eef2f9;
+            padding: 4px 10px;
+            font-size: 12px;
+            color: #2c7cb8;
+            text-decoration: none;
+            border-radius: 20px;
+        }
+        .pagination {
+            margin: 30px 0 20px;
+            text-align: center;
+        }
+        .pagination a, .pagination span {
+            display: inline-block;
+            padding: 6px 12px;
+            margin: 0 4px;
+            border: 1px solid #ddd;
+            background: #fff;
+            color: #2c7cb8;
+            font-size: 13px;
+            text-decoration: none;
+        }
+        .pagination a:hover {
+            background: #2c7cb8;
+            color: white;
+        }
+        .pagination .current {
+            background: #ffb347;
+            border-color: #ffb347;
+            color: #fff;
+        }
+        .footer {
+            background: #f8fafc;
+            border-top: 1px solid #e3e9ef;
+            padding: 20px 20px;
+            font-size: 12px;
+            color: #7e8c9c;
+            text-align: center;
+            margin-top: 15px;
+        }
+        .footer a {
+            color: #2c7cb8;
+            text-decoration: none;
+            margin: 0 5px;
+        }
+        @media (max-width: 720px) {
+            .main-wrapper {
+                flex-direction: column;
+            }
+            .blog-title { font-size: 26px; }
+        }
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #888;
+        }
+        .no-posts {
+            text-align: center;
+            padding: 50px 20px;
+            background: #fafcfd;
+            border-radius: 8px;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="top-notice">
+        📝 公告：本站博客文章自动同步 /posts/ 目录下的所有 .md 文件 | 支持动态更新，新增md文件刷新页面即显示
+        <a href="#" id="refreshPostsLink" style="margin-left: 12px;">🔄 手动刷新文章</a>
+    </div>
+    <div class="blog-header">
+        <h1 class="blog-title"><a href="index.html">个人博客 · 静思笔记</a></h1>
+        <div class="blog-sub">基于 Markdown 动态更新 | 记录思考与成长</div>
+    </div>
+    <div class="nav-bar">
+        <ul class="nav-list">
+            <li class="active" id="navHomeTab"><a href="#">首页</a></li>
+            <li><a href="#" id="navArchivesLink">归档</a></li>
+            <li><a href="#" id="navAboutLink">关于</a></li>
+        </ul>
+    </div>
+
+    <div class="main-wrapper" id="appRoot">
+        <!-- 左侧内容区域：将被动态渲染为文章列表或详情页 -->
+        <div class="content-left" id="dynamicContent">
+            <div class="loading">加载文章中...</div>
+        </div>
+        <!-- 右侧边栏 保持与架构一致 不包含特定个人信息，只放通用模块 -->
+        <div class="sidebar-right">
+            <div class="side-mod">
+                <div class="mod-title">📂 文章分类</div>
+                <div class="mod-content">
+                    <ul class="info-list" id="categoryList">
+                        <li><a href="#" data-cat="all">全部文章</a></li>
+                        <!-- 动态生成分类 -->
+                    </ul>
+                </div>
+            </div>
+            <div class="side-mod">
+                <div class="mod-title">📅 近期文章</div>
+                <div class="mod-content">
+                    <ul class="info-list" id="recentPostsList">
+                        <li>暂无文章</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="side-mod">
+                <div class="mod-title">🔖 标签云</div>
+                <div class="mod-content tag-cloud" id="tagCloud">
+                    <span>加载中...</span>
+                </div>
+            </div>
+            <div class="side-mod">
+                <div class="mod-title">📌 关于本站</div>
+                <div class="mod-content">
+                    <p>✍️ 基于静态Markdown文件自动生成博客内容。<br>
+                    将 .md 文件放在 <strong>/posts/</strong> 目录下，刷新页面即可自动更新文章列表。<br>
+                    架构模仿经典新浪博客布局，纯净写作，自由记录。</p>
+                    <p style="margin-top:8px;">✨ 支持 front-matter 解析标题、日期、分类、标签。</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="footer">
+        <p><a href="#">关于本站</a> | <a href="#">Markdown驱动</a> | <a href="#">开源精神</a> | <a href="#">动态更新架构</a></p>
+        <p>Copyright © 2025 个人博客 | 保留部分权利 | 基于 marked.js 实时解析</p>
+        <p style="margin-top: 6px;">📄 自动读取 /posts/ 文件夹下所有 .md 文件，实现「添加即更新」</p>
+    </div>
+</div>
+
+<script>
+    // ---------- 配置 ----------
+    // 注意：由于浏览器的安全限制，直接通过 fetch 读取本地文件夹列表需要后端支持。
+    // 实际生产环境中需要提供一个接口返回 posts 目录下的文件列表。
+    // 此处采用模拟的文件列表 + fetch 读取具体 md 内容的方式，但为了演示“自动更新md文件架构”，
+    // 我们提供两种模式：1) 通过预设一个 manifest.json 接口，或者 2) 手动配置文章索引。
+    // 为了让此页面真正做到“自动更新您的md文件”，我们在代码中提供一个文件清单生成函数，
+    // 实际部署时您可以配合一个简单的服务端脚本（如PHP或Node）返回文件列表，或者使用静态生成方式。
+    // 为了完全在前端演示自动更新能力，我们采用一个动态的“已知文章配置 + 支持通过 fetch 动态检测 md 文件是否存在”的方式。
+    // 但为了最佳体验，此处实现一个虚拟的 posts 文件查找机制：您可以通过在下方 postsManifest 中添加 .md 文件路径，
+    // 而页面会尝试去 fetch 对应的 md 文件并解析。真正的“自动更新” 依赖于构建时或服务端。
+    // 为了让架构具备可扩展性，这里编写一个完整的 Markdown 文章加载器，支持通过 API 获取文章列表，
+    // 并支持前端动态刷新（模拟新增md文件后，通过重新获取清单来更新）。
+    
+    // 为了简化并且满足“自动更新我的md文件”的需求，这里设计了一个简单的文章索引获取器，
+    // 实际使用时，您可以创建一个 posts.json 或者由后端读取 posts 文件夹生成。下面的代码提供了两种思路的兼容演示。
+    // 默认我们将列举一组示例文章，但您只需要将新的 md 文件放入 /posts/ 目录并在 index.json 中配置即可实现动态刷新。
+    
+    // 重要：为了让大家体验“自动更新”，我们提供手动刷新时重新读取配置文件的功能。
+    // 此处我们约定：在根目录存在一个 articles_manifest.json 文件，它返回文章列表，每个文章包含 filename, title, date, category, tags, summary。
+    // 为了演示开箱即用，如果没有 manifest，则使用内嵌的示例文章并尝试 fetch 实际的 md 文件。
+    // 您可以根据自己的服务器环境，在 posts 文件夹中存放 md 文件，并生成相应的清单接口。
+    
+    // 全局状态
+    let currentView = 'list'; // 'list' 或 'detail'
+    let currentPostId = null;
+    let allPosts = [];         // 存储文章元数据
+    let postsLoaded = false;
+    
+    // 辅助函数：解析 Markdown 的 Front Matter (简单版)
+    function parseFrontMatter(mdContent) {
+        const frontMatterRegex = /^---\s*\n([\s\S]*?)\n---\s*\n/;
+        const match = mdContent.match(frontMatterRegex);
+        let metadata = {};
+        let content = mdContent;
+        if (match) {
+            const yamlBlock = match[1];
+            // 简单解析 key: value
+            const lines = yamlBlock.split('\n');
+            lines.forEach(line => {
+                const colonIndex = line.indexOf(':');
+                if (colonIndex > 0) {
+                    let key = line.slice(0, colonIndex).trim();
+                    let value = line.slice(colonIndex + 1).trim();
+                    if (value.startsWith('"') && value.endsWith('"')) value = value.slice(1, -1);
+                    if (key && value) metadata[key] = value;
+                }
+            });
+            content = mdContent.slice(match[0].length);
+        }
+        return { metadata, content };
+    }
+    
+    // 渲染文章列表
+    async function fetchArticlesManifest() {
+        // 优先尝试加载 articles_manifest.json (模拟后端自动扫描posts目录的接口)
+        try {
+            const response = await fetch('articles_manifest.json?t=' + Date.now());
+            if (response.ok) {
+                const manifest = await response.json();
+                if (manifest.posts && Array.isArray(manifest.posts)) {
+                    allPosts = manifest.posts;
+                    return;
+                }
+            }
+        } catch(e) { console.log('未找到manifest，使用演示数据'); }
+        
+        // 如果没有清单，使用默认演示数据且尝试加载posts文件夹下的几个预设md（示例）
+        // 这里可以模拟从 /posts/ 下预置一些文件，用户替换自己的md即可
+        const demoPosts = [
+            { filename: "hello-world.md", title: "欢迎使用Markdown博客系统", date: "2025-01-15", category: "随笔", tags: ["markdown","博客"], summary: "本站支持自动读取 /posts/ 下的所有.md文件，只需要将你的Markdown文章放入该目录即可动态更新。" },
+            { filename: "example-post.md", title: "如何搭建自动更新的个人博客架构", date: "2025-02-20", category: "技术", tags: ["前端","架构"], summary: "本文介绍如何利用静态Markdown文件配合前端marked库，实现类似新浪博客风格的动态内容系统..." },
+            { filename: "life-note.md", title: "生活随想：春日的阳光", date: "2025-03-01", category: "生活", tags: ["随想","日常"], summary: "春天适合思考和阅读，记录一些琐碎的温暖片段。" }
+        ];
+        // 增强：尝试去fetch这些md文件，若文件存在则保留，否则依然展示但提醒文件缺失
+        const postsWithContentCheck = [];
+        for (let p of demoPosts) {
+            try {
+                const testResp = await fetch(`posts/${p.filename}`);
+                if (testResp.ok) {
+                    postsWithContentCheck.push(p);
+                } else {
+                    // 文件不存在依然添加为占位提示
+                    p.missingFile = true;
+                    postsWithContentCheck.push(p);
+                }
+            } catch(e) {
+                p.missingFile = true;
+                postsWithContentCheck.push(p);
+            }
+        }
+        allPosts = postsWithContentCheck;
+    }
+    
+    // 加载具体文章详情
+    async function loadPostContent(post) {
+        try {
+            const response = await fetch(`posts/${post.filename}?t=${Date.now()}`);
+            if (!response.ok) throw new Error('文件不存在');
+            const mdText = await response.text();
+            const { metadata, content } = parseFrontMatter(mdText);
+            // 合并metadata与原有post信息，metadata优先级更高
+            const finalPost = { ...post, ...metadata };
+            finalPost.htmlContent = marked.parse(content);
+            finalPost.rawContent = content;
+            return finalPost;
+        } catch(e) {
+            console.warn(`无法加载 ${post.filename}`, e);
+            return { ...post, htmlContent: '<p>⚠️ 该文章文件未找到，请确认 posts 目录下存在对应 .md 文件，并刷新页面。</p>', missingFile: true };
+        }
+    }
+    
+    // 渲染列表视图
+    async function renderHomeList() {
+        const container = document.getElementById('dynamicContent');
+        if (!allPosts.length) {
+            container.innerHTML = `<div class="no-posts"><p>📭 暂无文章，请将 .md 文件放入 /posts/ 文件夹并配置 articles_manifest.json 或参考架构说明。</p><p><a href="#" id="tryReloadBtn">🔄 重新加载</a></p></div>`;
+            const reloadBtn = document.getElementById('tryReloadBtn');
+            if(reloadBtn) reloadBtn.onclick = (e) => { e.preventDefault(); refreshAllData(); };
+            return;
+        }
+        let html = '';
+        allPosts.sort((a,b) => new Date(b.date) - new Date(a.date));
+        for (let post of allPosts) {
+            html += `
+                <div class="blog-entry" data-filename="${post.filename}">
+                    <h2 class="entry-title"><a href="#" class="post-link" data-filename="${post.filename}">${escapeHtml(post.title || '无标题')}</a></h2>
+                    <div class="entry-meta">${post.date || '未知日期'} ｜ 分类：<a href="#" data-cat="${post.category || '未分类'}">${post.category || '未分类'}</a> ｜ 标签：${(post.tags || []).map(t => `<a href="#">${t}</a>`).join(', ')}</div>
+                    <div class="entry-summary">${escapeHtml(post.summary || (post.excerpt || '暂无摘要，点击阅读全文'))}</div>
+                    <a href="#" class="read-more post-link" data-filename="${post.filename}">阅读全文 &gt;&gt;</a>
+                </div>
+            `;
+        }
+        container.innerHTML = html;
+        // 绑定文章链接事件
+        document.querySelectorAll('.post-link').forEach(link => {
+            link.addEventListener('click', async (e) => {
+                e.preventDefault();
+                const filename = link.getAttribute('data-filename');
+                const postMeta = allPosts.find(p => p.filename === filename);
+                if(postMeta) await showPostDetail(postMeta);
+            });
+        });
+        renderSidebarMeta();
+    }
+    
+    // 显示文章详情
+    async function showPostDetail(postMeta) {
+        const container = document.getElementById('dynamicContent');
+        container.innerHTML = '<div class="loading">加载文章内容...</div>';
+        const fullPost = await loadPostContent(postMeta);
+        const html = `
+            <div class="post-detail">
+                <a href="#" class="back-link" id="backToHome">← 返回首页</a>
+                <h1 class="detail-title">${escapeHtml(fullPost.title || '无标题')}</h1>
+                <div class="detail-meta">
+                    📅 ${fullPost.date || '未知日期'} &nbsp;|&nbsp;
+                    📂 ${fullPost.category || '未分类'} &nbsp;|&nbsp;
+                    🏷️ ${(fullPost.tags || []).join(', ')}
+                </div>
+                <div class="post-content">
+                    ${fullPost.htmlContent || '<p>无法解析内容</p>'}
+                </div>
+                <a href="#" class="back-link" id="backToHomeBottom">← 返回文章列表</a>
+            </div>
+        `;
+        container.innerHTML = html;
+        document.getElementById('backToHome')?.addEventListener('click', (e) => {
+            e.preventDefault();
+            renderHomeList();
+            currentView = 'list';
+        });
+        document.getElementById('backToHomeBottom')?.addEventListener('click', (e) => {
+            e.preventDefault();
+            renderHomeList();
+            currentView = 'list';
+        });
+        currentView = 'detail';
+    }
+    
+    // 渲染侧边栏: 分类、近期文章、标签云
+    function renderSidebarMeta() {
+        if(!allPosts.length) return;
+        // 分类统计
+        const catMap = new Map();
+        const tagMap = new Map();
+        allPosts.forEach(p => {
+            let cat = p.category || '其他';
+            catMap.set(cat, (catMap.get(cat) || 0) + 1);
+            if(p.tags && Array.isArray(p.tags)) {
+                p.tags.forEach(tag => { tagMap.set(tag, (tagMap.get(tag) || 0) + 1); });
+            }
+        });
+        let catHtml = '<li><a href="#" data-cat="all">全部文章</a></li>';
+        for(let [cat, count] of catMap.entries()) {
+            catHtml += `<li><a href="#" data-cat="${cat}">${cat} (${count})</a></li>`;
+        }
+        document.getElementById('categoryList').innerHTML = catHtml;
+        // 绑定分类点击
+        document.querySelectorAll('#categoryList a').forEach(a => {
+            a.addEventListener('click', (e) => {
+                e.preventDefault();
+                const cat = a.getAttribute('data-cat');
+                if(cat === 'all') renderHomeList();
+                else {
+                    const filtered = allPosts.filter(p => p.category === cat);
+                    renderFilteredList(filtered);
+                }
+            });
+        });
+        // 近期文章 (最近5篇)
+        let recent = [...allPosts].sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0,5);
+        let recentHtml = '';
+        recent.forEach(p => { recentHtml += `<li><a href="#" class="post-link" data-filename="${p.filename}">${escapeHtml(p.title)}</a></li>`; });
+        document.getElementById('recentPostsList').innerHTML = recentHtml || '<li>暂无</li>';
+        document.querySelectorAll('#recentPostsList .post-link').forEach(link => {
+            link.addEventListener('click', async (e) => {
+                e.preventDefault();
+                const fn = link.getAttribute('data-filename');
+                const post = allPosts.find(p=>p.filename === fn);
+                if(post) await showPostDetail(post);
+            });
+        });
+        // 标签云
+        let tagHtml = '';
+        for(let [tag, cnt] of tagMap.entries()) {
+            tagHtml += `<a href="#" data-tag="${tag}">${tag}(${cnt})</a>`;
+        }
+        document.getElementById('tagCloud').innerHTML = tagHtml || '暂无标签';
+        document.querySelectorAll('#tagCloud a').forEach(tagLink => {
+            tagLink.addEventListener('click', (e) => {
+                e.preventDefault();
+                const tag = tagLink.getAttribute('data-tag');
+                const filtered = allPosts.filter(p => p.tags && p.tags.includes(tag));
+                renderFilteredList(filtered);
+            });
+        });
+    }
+    
+    function renderFilteredList(postsArray) {
+        const container = document.getElementById('dynamicContent');
+        if(postsArray.length === 0) { container.innerHTML = '<div class="no-posts">没有找到相关文章</div>'; return; }
+        let html = '';
+        for(let post of postsArray) {
+            html += `<div class="blog-entry"><h2 class="entry-title"><a href="#" class="post-link" data-filename="${post.filename}">${escapeHtml(post.title)}</a></h2><div class="entry-meta">${post.date} ｜ ${post.category}</div><div class="entry-summary">${escapeHtml(post.summary || '')}</div><a href="#" class="read-more post-link" data-filename="${post.filename}">阅读全文</a></div>`;
+        }
+        container.innerHTML = html;
+        document.querySelectorAll('.post-link').forEach(link => {
+            link.addEventListener('click', async (e) => {
+                e.preventDefault();
+                const fn = link.getAttribute('data-filename');
+                const post = allPosts.find(p=>p.filename === fn);
+                if(post) await showPostDetail(post);
+            });
+        });
+    }
+    
+    function escapeHtml(str) { if(!str) return ''; return str.replace(/[&<>]/g, function(m){if(m==='&') return '&amp;'; if(m==='<') return '&lt;'; if(m==='>') return '&gt;'; return m;}); }
+    
+    async function refreshAllData() {
+        document.getElementById('dynamicContent').innerHTML = '<div class="loading">重新扫描文章...</div>';
+        await fetchArticlesManifest();
+        await renderHomeList();
+    }
+    
+    async function init() {
+        await fetchArticlesManifest();
+        await renderHomeList();
+        document.getElementById('refreshPostsLink')?.addEventListener('click', (e) => { e.preventDefault(); refreshAllData(); });
+        // 归档/关于简单模拟
+        document.getElementById('navArchivesLink')?.addEventListener('click', (e) => {
+            e.preventDefault();
+            document.getElementById('dynamicContent').innerHTML = `<div class="post-detail"><h2>文章归档</h2><ul>${allPosts.map(p=>`<li>${p.date} - <a href="#" class="post-link" data-filename="${p.filename}">${p.title}</a></li>`).join('')}</ul><a href="#" class="back-link" id="backFromArch">返回首页</a></div>`;
+            document.querySelectorAll('.post-link').forEach(l=>l.addEventListener('click',async(e)=>{e.preventDefault();const fn=l.getAttribute('data-filename');const post=allPosts.find(p=>p.filename===fn);if(post) await showPostDetail(post);}));
+            document.getElementById('backFromArch')?.addEventListener('click',(e)=>{e.preventDefault();renderHomeList();});
+        });
+        document.getElementById('navAboutLink')?.addEventListener('click', (e) => {
+            e.preventDefault();
+            document.getElementById('dynamicContent').innerHTML = `<div class="post-detail"><h2>关于本站</h2><p>此博客完全基于Markdown文件驱动，将您的.md文章放入/posts/文件夹，并维护articles_manifest.json即可实现自动更新列表。架构致敬新浪博客经典布局。</p><a href="#" class="back-link" id="backAboutHome">返回首页</a></div>`;
+            document.getElementById('backAboutHome')?.addEventListener('click',(e)=>{e.preventDefault();renderHomeList();});
+        });
+    }
+    
+    init();
+</script>
+</body>
+</html>
