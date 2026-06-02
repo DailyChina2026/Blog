@@ -4,73 +4,127 @@ on:
   push:
     paths:
       - 'posts/**/*.md'
+      - 'posts/**/*.txt'
   workflow_dispatch:
+  schedule:
+    - cron: '0 */6 * * *'  # 每6小时运行一次
 
 jobs:
   update-manifest:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       
-      - name: Generate articles manifest with tags
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          
+      - name: Generate articles manifest
         run: |
           node -e '
           const fs = require("fs");
           const path = require("path");
           
+          // 解析 front matter
           function parseFrontMatter(content) {
             const match = content.match(/^---\s*\n([\s\S]*?)\n---\s*\n/);
-            if (!match) return { metadata: {}, content };
+            if (!match) return { metadata: {}, content: content };
             
             const yamlBlock = match[1];
             const metadata = {};
             const lines = yamlBlock.split("\n");
+            
             for (const line of lines) {
+              if (line.trim() === "") continue;
               const colonIndex = line.indexOf(":");
               if (colonIndex > 0) {
                 let key = line.slice(0, colonIndex).trim();
                 let value = line.slice(colonIndex + 1).trim();
+                
+                // 解析数组 [a, b, c]
                 if (value.startsWith("[") && value.endsWith("]")) {
-                  // 解析数组格式的标签 [tag1, tag2]
                   value = value.slice(1, -1).split(",").map(v => v.trim().replace(/["\u0027]/g, ""));
-                } else if (value.startsWith('"') && value.endsWith('"')) {
+                } 
+                // 移除引号
+                else if ((value.startsWith('"') && value.endsWith('"')) || 
+                         (value.startsWith("'") && value.endsWith("'"))) {
                   value = value.slice(1, -1);
                 }
                 metadata[key] = value;
               }
             }
-            return { metadata, content: content.slice(match[0].length) };
+            return { metadata };
           }
           
           const postsDir = "./posts";
-          if (!fs.existsSync(postsDir)) fs.mkdirSync(postsDir);
+          if (!fs.existsSync(postsDir)) {
+            console.log("posts目录不存在，创建目录");
+            fs.mkdirSync(postsDir, { recursive: true });
+          }
           
-          const files = fs.readdirSync(postsDir).filter(f => f.endsWith(".md"));
+          // 读取所有.md和.txt文件
+          let files = [];
+          try {
+            files = fs.readdirSync(postsDir).filter(f => 
+              f.endsWith(".md") || f.endsWith(".txt")
+            );
+          } catch(e) {
+            console.log("读取目录失败:", e);
+          }
+          
+          console.log(`找到 ${files.length} 个文件:`, files);
+          
           const posts = [];
           
           for (const file of files) {
-            const filePath = path.join(postsDir, file);
-            const content = fs.readFileSync(filePath, "utf8");
-            const { metadata } = parseFrontMatter(content);
-            
-            posts.push({
-              filename: file,
-              title: metadata.title || file.replace(".md", ""),
-              date: metadata.date || new Date().toISOString().split("T")[0],
-              category: metadata.category || "未分类",
-              tags: metadata.tags || [],      // 提取标签
-              summary: metadata.summary || "暂无摘要"
-            });
+            try {
+              const filePath = path.join(postsDir, file);
+              const content = fs.readFileSync(filePath, "utf8");
+              const { metadata } = parseFrontMatter(content);
+              
+              // 获取文件修改时间作为备用日期
+              const stats = fs.statSync(filePath);
+              const fileDate = stats.mtime.toISOString().split("T")[0];
+              
+              posts.push({
+                filename: file,
+                title: metadata.title || file.replace(/\.(md|txt)$/, ""),
+                date: metadata.date || fileDate,
+                category: metadata.category || "未分类",
+                tags: metadata.tags || [],
+                summary: metadata.summary || "点击阅读全文"
+              });
+            } catch(e) {
+              console.error(`处理文件 ${file} 时出错:`, e);
+            }
           }
           
-          fs.writeFileSync("articles_manifest.json", JSON.stringify({ posts, updated: new Date().toISOString() }, null, 2));
-          console.log(`Generated manifest with ${posts.length} posts`);
+          // 按日期排序
+          posts.sort((a, b) => new Date(b.date) - new Date(a.date));
+          
+          const manifest = {
+            posts: posts,
+            total: posts.length,
+            updated: new Date().toISOString()
+          };
+          
+          fs.writeFileSync("articles_manifest.json", JSON.stringify(manifest, null, 2));
+          console.log(`✅ 已生成清单，包含 ${posts.length} 篇文章`);
           '
           
-      - name: Commit and push if changed
+      - name: Commit and push changes
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add articles_manifest.json
-          git diff --quiet && git diff --staged --quiet || git commit -m "Auto-update posts manifest with tags"
-          git push
+          if git diff --staged --quiet; then
+            echo "没有变化，无需提交"
+          else
+            git commit -m "Auto-update posts manifest [skip ci]"
+            git push
+          fi
