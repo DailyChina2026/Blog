@@ -3,8 +3,8 @@ name: Update Posts Manifest
 on:
   push:
     paths:
-      - 'posts/**/*.md'  # 当posts目录下有md文件变更时触发
-  workflow_dispatch:     # 支持手动触发
+      - 'posts/**/*.md'
+  workflow_dispatch:
 
 jobs:
   update-manifest:
@@ -12,29 +12,59 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
-      - name: Generate articles manifest
+      - name: Generate articles manifest with tags
         run: |
-          # 生成文章清单JSON
           node -e '
           const fs = require("fs");
           const path = require("path");
+          
+          function parseFrontMatter(content) {
+            const match = content.match(/^---\s*\n([\s\S]*?)\n---\s*\n/);
+            if (!match) return { metadata: {}, content };
+            
+            const yamlBlock = match[1];
+            const metadata = {};
+            const lines = yamlBlock.split("\n");
+            for (const line of lines) {
+              const colonIndex = line.indexOf(":");
+              if (colonIndex > 0) {
+                let key = line.slice(0, colonIndex).trim();
+                let value = line.slice(colonIndex + 1).trim();
+                if (value.startsWith("[") && value.endsWith("]")) {
+                  // 解析数组格式的标签 [tag1, tag2]
+                  value = value.slice(1, -1).split(",").map(v => v.trim().replace(/["\u0027]/g, ""));
+                } else if (value.startsWith('"') && value.endsWith('"')) {
+                  value = value.slice(1, -1);
+                }
+                metadata[key] = value;
+              }
+            }
+            return { metadata, content: content.slice(match[0].length) };
+          }
+          
           const postsDir = "./posts";
+          if (!fs.existsSync(postsDir)) fs.mkdirSync(postsDir);
+          
           const files = fs.readdirSync(postsDir).filter(f => f.endsWith(".md"));
           const posts = [];
+          
           for (const file of files) {
-            const content = fs.readFileSync(path.join(postsDir, file), "utf8");
-            // 解析front matter获取标题、日期等
-            const titleMatch = content.match(/title:\s*[""]?(.+?)[""]?\n/);
-            const dateMatch = content.match(/date:\s*(.+?)\n/);
+            const filePath = path.join(postsDir, file);
+            const content = fs.readFileSync(filePath, "utf8");
+            const { metadata } = parseFrontMatter(content);
+            
             posts.push({
               filename: file,
-              title: titleMatch ? titleMatch[1] : file.replace(".md", ""),
-              date: dateMatch ? dateMatch[1] : new Date().toISOString().split("T")[0],
-              category: "随笔",
-              tags: []
+              title: metadata.title || file.replace(".md", ""),
+              date: metadata.date || new Date().toISOString().split("T")[0],
+              category: metadata.category || "未分类",
+              tags: metadata.tags || [],      // 提取标签
+              summary: metadata.summary || "暂无摘要"
             });
           }
-          fs.writeFileSync("articles_manifest.json", JSON.stringify({posts, updated: new Date()}, null, 2));
+          
+          fs.writeFileSync("articles_manifest.json", JSON.stringify({ posts, updated: new Date().toISOString() }, null, 2));
+          console.log(`Generated manifest with ${posts.length} posts`);
           '
           
       - name: Commit and push if changed
@@ -42,5 +72,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add articles_manifest.json
-          git diff --quiet && git diff --staged --quiet || git commit -m "Auto-update posts manifest"
+          git diff --quiet && git diff --staged --quiet || git commit -m "Auto-update posts manifest with tags"
           git push
